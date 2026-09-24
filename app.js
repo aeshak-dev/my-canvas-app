@@ -1,4 +1,4 @@
-// Global Fabric Settings
+// Disable fabric object caching globally to eliminate stroke ghosting/glitches
 fabric.Object.prototype.objectCaching = false;
 
 const canvas = new fabric.Canvas('drawingCanvas', {
@@ -12,41 +12,48 @@ const canvas = new fabric.Canvas('drawingCanvas', {
   targetFindTolerance: 10
 });
 
-// App State Variables
 let currentColor = '#ffffff';
 let currentBgColor = '#121212';
 let currentGridType = 'grid';
 let currentBrushSize = 3;
 let currentMode = 'draw';
 
-// Sync Brush State
+// Configure Brush Setup
 function updateBrush() {
   if (currentMode === 'draw') {
+    canvas.isDrawingMode = true;
     canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
     canvas.freeDrawingBrush.color = currentColor;
     canvas.freeDrawingBrush.width = parseInt(currentBrushSize, 10) || 3;
   } else if (currentMode === 'erase') {
-    if (fabric.EraserBrush) {
-      canvas.freeDrawingBrush = new fabric.EraserBrush(canvas);
-    } else {
-      canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
-      canvas.freeDrawingBrush.color = currentBgColor;
-    }
+    canvas.isDrawingMode = true;
+    canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+    // Erase matching current background color
+    canvas.freeDrawingBrush.color = currentBgColor;
     canvas.freeDrawingBrush.width = 20;
+  } else {
+    canvas.isDrawingMode = false;
   }
 }
 
-// Ensure drawn paths are non-interactive by default
+// Ensure drawn paths remain unselectable by default
 canvas.on('path:created', (opt) => {
   if (opt.path) {
     opt.path.set({
       selectable: false,
       evented: false
     });
+
+    if (currentMode === 'erase') {
+      // Cuts out drawn paths transparently over custom backgrounds
+      opt.path.globalCompositeOperation = 'destination-out';
+      opt.path.stroke = 'rgba(0,0,0,1)';
+      canvas.requestRenderAll();
+    }
   }
 });
 
-// Prevent UI panels from blocking canvas clicks
+// Prevent UI panels from intercepting canvas clicks
 document.querySelectorAll('.ui-element').forEach(element => {
   const stopEvt = (e) => e.stopPropagation();
   element.addEventListener('pointerdown', stopEvt);
@@ -54,7 +61,7 @@ document.querySelectorAll('.ui-element').forEach(element => {
   element.addEventListener('mousedown', stopEvt);
 });
 
-// --- WORKING UNDO / REDO ---
+// --- UNDO / REDO SYSTEM ---
 let historyStack = [];
 let redoStack = [];
 let isStateChanging = false;
@@ -66,7 +73,7 @@ function saveState() {
   redoStack = [];
 }
 
-// Initial state
+// Capture Initial State
 saveState();
 
 canvas.on('object:added', saveState);
@@ -102,10 +109,9 @@ document.getElementById('redoBtn')?.addEventListener('click', () => {
   }
 });
 
-// --- TOOL MODES ---
+// --- TOOL SELECTION ---
 function setMode(mode) {
   currentMode = mode;
-  canvas.isDrawingMode = (mode === 'draw' || mode === 'erase');
   canvas.selection = (mode === 'select');
 
   canvas.forEachObject(obj => {
@@ -220,7 +226,7 @@ function updateCanvasBackground() {
   });
 }
 
-// --- STROKE ERASER ---
+// --- STROKE-BY-STROKE ERASER ---
 let isStrokeErasing = false;
 
 function eraseTargetStroke(opt) {
@@ -256,11 +262,11 @@ document.getElementById('clearBtn')?.addEventListener('click', () => {
   saveState();
 });
 
-// Initialize on Load
+// Initialize Defaults
 setMode('draw');
 updateCanvasBackground();
 
-// Window Resize
+// Handle Window Resize
 window.addEventListener('resize', () => {
   canvas.setWidth(window.innerWidth);
   canvas.setHeight(window.innerHeight);
