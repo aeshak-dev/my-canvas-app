@@ -1,66 +1,52 @@
+// --- FABRIC.JS ENGINE INIT ---
+// Disable object caching globally to eliminate stroke ghosting/flickering
+fabric.Object.prototype.objectCaching = false;
+
+const canvasEl = document.getElementById('c');
 const containerEl = document.getElementById('canvas-container');
 
-const canvas = new fabric.Canvas('drawingCanvas', {
-  isDrawingMode: true,
-  width: window.innerWidth,
-  height: window.innerHeight,
-  backgroundColor: null
+const canvas = new fabric.Canvas('c', {
+  isDrawingMode: false,
+  backgroundColor: '#121212',
+  selection: true,
+  fireRightClick: true,
+  stopContextMenu: true,
 });
 
-let currentColor = '#ffffff';
-let currentBrushSize = 3;
+// Fullscreen Resize Handler
+function resizeCanvas() {
+  canvas.setWidth(containerEl.clientWidth);
+  canvas.setHeight(containerEl.clientHeight);
+  canvas.renderAll();
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
 
-// Configure Freehand Brush with smoothing
+// Set default drawing brush
 canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
-canvas.freeDrawingBrush.color = currentColor;
-canvas.freeDrawingBrush.width = currentBrushSize;
-canvas.freeDrawingBrush.decimate = 8;
+canvas.freeDrawingBrush.color = '#ffffff';
+canvas.freeDrawingBrush.width = 3;
 
-let currentMode = 'draw';
-let eraserType = 'stroke';
-let isDragging = false;
-let lastPosX = 0, lastPosY = 0;
-
-// Dismiss AI Assistant
-document.getElementById('closeAiPanel').addEventListener('click', () => {
-  document.getElementById('ai-panel').classList.add('hidden');
-});
-
-// Grid Style Switcher
-document.querySelectorAll('.grid-btn').forEach(btn => {
-  btn.addEventListener('click', (e) => {
-    document.querySelectorAll('.grid-btn').forEach(b => b.classList.remove('active'));
-    e.target.classList.add('active');
-    
-    const gridStyle = e.target.getAttribute('data-grid');
-    containerEl.className = gridStyle;
-  });
-});
-
-// --- UNDO / REDO ENGINE ---
-const stateStack = [];
-const redoStack = [];
+// --- STATE MANAGEMENT (UNDO / REDO) ---
+let stateStack = [];
+let redoStack = [];
 let isStateLocked = false;
 
 function saveState() {
   if (isStateLocked) return;
-  stateStack.push(JSON.stringify(canvas));
-  redoStack.length = 0;
+  const json = JSON.stringify(canvas.toJSON());
+  stateStack.push(json);
+  redoStack = []; // Clear redo tree on new action
 }
+
+// Initial state snapshot
+saveState();
 
 canvas.on('object:added', saveState);
 canvas.on('object:modified', saveState);
 canvas.on('object:removed', saveState);
 
-// Ignore accidental micro-strokes
-canvas.on('path:created', (e) => {
-  const path = e.path;
-  if (path && (path.width < 2 && path.height < 2)) {
-    canvas.remove(path);
-  }
-});
-
-document.getElementById('undoBtn').addEventListener('click', () => {
+document.getElementById('btn-undo').addEventListener('click', () => {
   if (stateStack.length <= 1) return;
   isStateLocked = true;
   redoStack.push(stateStack.pop());
@@ -71,7 +57,7 @@ document.getElementById('undoBtn').addEventListener('click', () => {
   });
 });
 
-document.getElementById('redoBtn').addEventListener('click', () => {
+document.getElementById('btn-redo').addEventListener('click', () => {
   if (redoStack.length === 0) return;
   isStateLocked = true;
   const nextState = redoStack.pop();
@@ -82,306 +68,241 @@ document.getElementById('redoBtn').addEventListener('click', () => {
   });
 });
 
-document.getElementById('clearBtn').addEventListener('click', () => {
-  canvas.clear();
-  canvas.backgroundColor = null;
-  saveState();
-});
+// --- TOOL SELECTION MODES ---
+let currentMode = 'select'; // 'select', 'draw', 'erase-pixel', 'erase-object'
 
-saveState();
-
-// Helper to calculate active viewport center
-function getViewportCenter() {
-  const vpt = canvas.viewportTransform;
-  return {
-    x: (canvas.width / 2 - vpt[4]) / vpt[0],
-    y: (canvas.height / 2 - vpt[5]) / vpt[3]
-  };
-}
-
-// Disable/enable object interactions per mode
-function updateObjectsSelectableState(selectable) {
-  canvas.forEachObject((obj) => {
-    obj.selectable = selectable;
-    obj.evented = selectable;
-  });
-}
-
-// --- MODE MANAGER ---
 function setMode(mode) {
   currentMode = mode;
   canvas.isDrawingMode = false;
   canvas.selection = false;
-  canvas.defaultCursor = 'default';
-  canvas.discardActiveObject().renderAll();
+  
+  // Reset buttons active state
+  document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
 
-  const popover = document.getElementById('eraser-popover');
-  if (mode !== 'erase') {
-    popover.classList.remove('visible');
-  }
-
-  const toolBtns = ['handBtn', 'selectBtn', 'drawBtn', 'eraseBtn', 'rectBtn', 'circleBtn', 'arrowBtn', 'textBtn', 'imgUploadBtn'];
-  toolBtns.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('active');
-  });
-
-  if (mode === 'hand') {
-    canvas.defaultCursor = 'grab';
-    updateObjectsSelectableState(false);
-    document.getElementById('handBtn').classList.add('active');
-  } else if (mode === 'select') {
+  if (mode === 'select') {
+    document.getElementById('btn-select').classList.add('active');
     canvas.selection = true;
-    updateObjectsSelectableState(true);
-    document.getElementById('selectBtn').classList.add('active');
   } else if (mode === 'draw') {
+    document.getElementById('btn-draw').classList.add('active');
     canvas.isDrawingMode = true;
-    updateObjectsSelectableState(false);
     canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
-    canvas.freeDrawingBrush.color = currentColor;
-    canvas.freeDrawingBrush.width = currentBrushSize;
-    canvas.freeDrawingBrush.decimate = 8;
-    document.getElementById('drawBtn').classList.add('active');
-  } else if (mode === 'erase') {
-    updateObjectsSelectableState(true);
-    document.getElementById('eraseBtn').classList.add('active');
-    popover.classList.add('visible');
-    applyEraserType(eraserType);
-  }
-}
-
-function applyEraserType(type) {
-  eraserType = type;
-  document.getElementById('strokeEraserBtn').classList.toggle('active', type === 'stroke');
-  document.getElementById('freeEraserBtn').classList.toggle('active', type === 'freeform');
-
-  if (currentMode !== 'erase') return;
-
-  if (type === 'stroke') {
-    canvas.isDrawingMode = false;
-    canvas.selection = false;
-    canvas.defaultCursor = 'crosshair';
-  } else if (type === 'freeform') {
-    // Native Fabric.js Eraser Brush for clean vector clipping
+    canvas.freeDrawingBrush.color = document.getElementById('color-picker').value;
+    canvas.freeDrawingBrush.width = 3;
+  } else if (mode === 'erase-pixel') {
+    document.getElementById('btn-erase-pixel').classList.add('active');
     canvas.isDrawingMode = true;
-    canvas.freeDrawingBrush = new fabric.EraserBrush(canvas);
-    canvas.freeDrawingBrush.width = 20;
-    canvas.defaultCursor = 'cell';
+    // Native pixel freeform eraser using destination-out composite operation
+    const eraserBrush = new fabric.PencilBrush(canvas);
+    eraserBrush.width = 20;
+    eraserBrush.color = 'rgba(0,0,0,1)';
+    canvas.freeDrawingBrush = eraserBrush;
+    canvas.freeDrawingBrush.globalCompositeOperation = 'destination-out';
+  } else if (mode === 'erase-object') {
+    document.getElementById('btn-erase-object').classList.add('active');
   }
 }
 
-document.getElementById('handBtn').addEventListener('click', () => setMode('hand'));
-document.getElementById('selectBtn').addEventListener('click', () => setMode('select'));
-document.getElementById('drawBtn').addEventListener('click', () => setMode('draw'));
+document.getElementById('btn-select').addEventListener('click', () => setMode('select'));
+document.getElementById('btn-draw').addEventListener('click', () => setMode('draw'));
+document.getElementById('btn-erase-pixel').addEventListener('click', () => setMode('erase-pixel'));
+document.getElementById('btn-erase-object').addEventListener('click', () => setMode('erase-object'));
 
-document.getElementById('eraseBtn').addEventListener('click', () => {
-  const popover = document.getElementById('eraser-popover');
-  if (currentMode === 'erase') {
-    popover.classList.toggle('visible');
-  } else {
-    setMode('erase');
+// Object Eraser Click & Drag Removal
+canvas.on('mouse:down', (e) => {
+  if (currentMode === 'erase-object' && e.target) {
+    canvas.remove(e.target);
+    canvas.renderAll();
   }
 });
-
-document.getElementById('strokeEraserBtn').addEventListener('click', () => applyEraserType('stroke'));
-document.getElementById('freeEraserBtn').addEventListener('click', () => applyEraserType('freeform'));
-
-// Object Stroke Eraser
-canvas.on('mouse:down', function(opt) {
-  if (currentMode === 'erase' && eraserType === 'stroke' && opt.target) {
-    canvas.remove(opt.target);
+canvas.on('mouse:move', (e) => {
+  if (currentMode === 'erase-object' && e.e.buttons === 1 && e.target) {
+    canvas.remove(e.target);
     canvas.renderAll();
   }
 });
 
-// Color Selection Handlers
-function updateStrokeColor(color) {
-  currentColor = color;
-  if (currentMode === 'draw') {
-    canvas.freeDrawingBrush.color = currentColor;
-  }
-}
-
-document.querySelectorAll('.swatch').forEach(swatch => {
-  swatch.addEventListener('click', (e) => {
-    document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
-    e.target.classList.add('active');
-    updateStrokeColor(e.target.getAttribute('data-color'));
+// --- SHAPE & TEXT INSERTION ---
+document.getElementById('btn-rect').addEventListener('click', () => {
+  const rect = new fabric.Rect({
+    left: canvas.width / 2 - 50,
+    top: canvas.height / 2 - 50,
+    fill: 'transparent',
+    stroke: document.getElementById('color-picker').value,
+    strokeWidth: 2,
+    width: 100,
+    height: 100
   });
+  canvas.add(rect);
+  setMode('select');
 });
 
-document.getElementById('customColorPicker').addEventListener('input', (e) => {
-  document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
-  updateStrokeColor(e.target.value);
+document.getElementById('btn-circle').addEventListener('click', () => {
+  const circle = new fabric.Circle({
+    left: canvas.width / 2 - 40,
+    top: canvas.height / 2 - 40,
+    fill: 'transparent',
+    stroke: document.getElementById('color-picker').value,
+    strokeWidth: 2,
+    radius: 40
+  });
+  canvas.add(circle);
+  setMode('select');
 });
 
-// --- PANNING & ZOOMING ENGINE ---
-canvas.on('mouse:wheel', function(opt) {
-  if (currentMode !== 'hand') return;
-  
-  const delta = opt.e.deltaY;
-  let zoom = canvas.getZoom();
-  zoom *= 0.999 ** delta;
-  
-  if (zoom > 5) zoom = 5;
-  if (zoom < 0.2) zoom = 0.2;
-
-  canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
-  opt.e.preventDefault();
-  opt.e.stopPropagation();
-  
-  const vpt = canvas.viewportTransform;
-  containerEl.style.backgroundPosition = `${vpt[4]}px ${vpt[5]}px`;
-  containerEl.style.backgroundSize = `${24 * zoom}px ${24 * zoom}px`;
+document.getElementById('btn-text').addEventListener('click', () => {
+  const text = new fabric.IText('Type here...', {
+    left: canvas.width / 2 - 50,
+    top: canvas.height / 2 - 10,
+    fill: document.getElementById('color-picker').value,
+    fontSize: 20
+  });
+  canvas.add(text);
+  setMode('select');
 });
 
-canvas.on('mouse:down', function(opt) {
-  if (currentMode === 'hand') {
-    const evt = opt.e;
-    isDragging = true;
-    canvas.defaultCursor = 'grabbing';
-    lastPosX = evt.clientX || (evt.touches && evt.touches[0].clientX);
-    lastPosY = evt.clientY || (evt.touches && evt.touches[0].clientY);
+// Color Picker Dynamic Sync
+document.getElementById('color-picker').addEventListener('input', (e) => {
+  const color = e.target.value;
+  if (currentMode === 'draw') {
+    canvas.freeDrawingBrush.color = color;
+  }
+  const activeObj = canvas.getActiveObject();
+  if (activeObj) {
+    if (activeObj.type === 'i-text') {
+      activeObj.set('fill', color);
+    } else {
+      activeObj.set('stroke', color);
+    }
+    canvas.renderAll();
   }
 });
 
-canvas.on('mouse:move', function(opt) {
-  if (isDragging && currentMode === 'hand') {
+// --- MULTI-TOUCH PAN & PINCH ZOOM ---
+let isPanning = false;
+let lastPosX = 0;
+let lastPosY = 0;
+
+canvas.on('mouse:down', (opt) => {
+  const evt = opt.e;
+  if (currentMode === 'select' && (!opt.target || evt.altKey)) {
+    isPanning = true;
+    lastPosX = evt.clientX || evt.touches?.[0]?.clientX;
+    lastPosY = evt.clientY || evt.touches?.[0]?.clientY;
+  }
+});
+
+canvas.on('mouse:move', (opt) => {
+  if (isPanning) {
     const evt = opt.e;
-    const clientX = evt.clientX || (evt.touches && evt.touches[0].clientX);
-    const clientY = evt.clientY || (evt.touches && evt.touches[0].clientY);
-    
+    const clientX = evt.clientX || evt.touches?.[0]?.clientX;
+    const clientY = evt.clientY || evt.touches?.[0]?.clientY;
     const deltaX = clientX - lastPosX;
     const deltaY = clientY - lastPosY;
-
-    const vpt = canvas.viewportTransform;
-    vpt[4] += deltaX;
-    vpt[5] += deltaY;
-    canvas.requestRenderAll();
-
-    containerEl.style.backgroundPosition = `${vpt[4]}px ${vpt[5]}px`;
-
+    canvas.relativePan(new fabric.Point(deltaX, deltaY));
     lastPosX = clientX;
     lastPosY = clientY;
   }
 });
 
-canvas.on('mouse:up', function() {
-  if (currentMode === 'hand') {
-    isDragging = false;
-    canvas.defaultCursor = 'grab';
+canvas.on('mouse:up', () => { isPanning = false; });
+
+canvas.on('mouse:wheel', (opt) => {
+  const delta = opt.e.deltaY;
+  let zoom = canvas.getZoom();
+  zoom *= 0.999 ** delta;
+  if (zoom > 20) zoom = 20;
+  if (zoom < 0.01) zoom = 0.01;
+  canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
+  opt.e.preventDefault();
+  opt.e.stopPropagation();
+});
+
+// Double Tap Canvas Focus / Zen Mode
+canvas.on('mouse:dblclick', (opt) => {
+  if (!opt.target) {
+    document.body.classList.toggle('zen-mode');
   }
 });
 
-// --- VECTOR SHAPES & TEXT TOOLS ---
+// --- CROPPED EXPORT & JSON SAVE ---
+document.getElementById('btn-export').addEventListener('click', () => {
+  const objects = canvas.getObjects();
+  if (objects.length === 0) return alert('Canvas is empty!');
 
-document.getElementById('rectBtn').addEventListener('click', () => {
-  const center = getViewportCenter();
-  const rect = new fabric.Rect({
-    left: center.x - 60,
-    top: center.y - 40,
-    width: 120,
-    height: 80,
-    fill: 'transparent',
-    stroke: currentColor,
-    strokeWidth: 2,
-    rx: 4,
-    ry: 4
+  // Calculate bounding box encompassing all written notes
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  objects.forEach(obj => {
+    const bbox = obj.getBoundingRect();
+    minX = Math.min(minX, bbox.left);
+    minY = Math.min(minY, bbox.top);
+    maxX = Math.max(maxX, bbox.left + bbox.width);
+    maxY = Math.max(maxY, bbox.top + bbox.height);
   });
 
-  canvas.add(rect);
-  setMode('select');
-  canvas.setActiveObject(rect);
-});
-
-document.getElementById('circleBtn').addEventListener('click', () => {
-  const center = getViewportCenter();
-  const circle = new fabric.Circle({
-    left: center.x - 45,
-    top: center.y - 45,
-    radius: 45,
-    fill: 'transparent',
-    stroke: currentColor,
-    strokeWidth: 2
+  const padding = 20;
+  const dataURL = canvas.toDataURL({
+    left: minX - padding,
+    top: minY - padding,
+    width: (maxX - minX) + (padding * 2),
+    height: (maxY - minY) + (padding * 2),
+    format: 'png'
   });
 
-  canvas.add(circle);
-  setMode('select');
-  canvas.setActiveObject(circle);
+  const a = document.createElement('a');
+  a.href = dataURL;
+  a.download = 'whiteboard-note.png';
+  a.click();
 });
 
-document.getElementById('arrowBtn').addEventListener('click', () => {
-  const center = getViewportCenter();
-  
-  const line = new fabric.Line([-60, 0, 50, 0], {
-    stroke: currentColor,
-    strokeWidth: 2,
-    originX: 'center',
-    originY: 'center'
-  });
-
-  const head = new fabric.Triangle({
-    left: 50,
-    top: 0,
-    width: 14,
-    height: 14,
-    fill: currentColor,
-    angle: 90,
-    originX: 'center',
-    originY: 'center'
-  });
-
-  const arrow = new fabric.Group([line, head], {
-    left: center.x - 60,
-    top: center.y - 7
-  });
-
-  canvas.add(arrow);
-  setMode('select');
-  canvas.setActiveObject(arrow);
+document.getElementById('btn-save').addEventListener('click', () => {
+  const jsonStr = JSON.stringify(canvas.toJSON());
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'whiteboard-state.json';
+  a.click();
 });
 
-document.getElementById('textBtn').addEventListener('click', () => {
-  const center = getViewportCenter();
-  const text = new fabric.IText('Type here...', {
-    left: center.x - 50,
-    top: center.y - 12,
-    fontSize: 22,
-    fontFamily: 'Inter, sans-serif',
-    fill: currentColor
-  });
+// --- WORKER AI BACKEND INTEGRATION ---
+const WORKER_URL = 'https://your-cloudflare-worker-url.workers.dev'; // Replace with deployed Cloudflare Worker URL
 
-  canvas.add(text);
-  setMode('select');
-  canvas.setActiveObject(text);
-  text.enterEditing();
-  text.selectAll();
+document.getElementById('ai-tool-select').addEventListener('change', async (e) => {
+  const action = e.target.value;
+  e.target.value = ''; // Reset dropdown selection
+
+  if (action === 'diagram') {
+    const prompt = window.prompt('Describe the diagram you want to generate:');
+    if (!prompt) return;
+
+    try {
+      const res = await fetch(WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'diagram', prompt })
+      });
+      const data = await res.json();
+      const content = data?.choices?.[0]?.message?.content;
+      if (content) {
+        const text = new fabric.IText(content, { left: 100, top: 100, fill: '#ffffff', fontSize: 16 });
+        canvas.add(text);
+      }
+    } catch (err) {
+      alert('AI Request failed: ' + err.message);
+    }
+
+  } else if (action === 'vision') {
+    const dataURL = canvas.toDataURL({ format: 'png' });
+    try {
+      const res = await fetch(WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'vision', image: dataURL, prompt: 'Analyze this whiteboard drawing.' })
+      });
+      const data = await res.json();
+      const summary = data?.choices?.[0]?.message?.content;
+      alert(summary || 'Analysis complete.');
+    } catch (err) {
+      alert('AI Vision Request failed: ' + err.message);
+    }
+  }
 });
-
-document.getElementById('imgUploadBtn').addEventListener('click', () => {
-  document.getElementById('imageLoader').click();
-});
-
-document.getElementById('imageLoader').addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (f) => {
-    fabric.Image.fromURL(f.target.result, (img) => {
-      const center = getViewportCenter();
-      img.scaleToWidth(250);
-      img.set({ left: center.x - 125, top: center.y - 125 });
-      canvas.add(img);
-      canvas.setActiveObject(img);
-      setMode('select');
-    });
-  };
-  reader.readAsDataURL(file);
-});
-
-window.addEventListener('resize', () => {
-  canvas.setWidth(window.innerWidth);
-  canvas.setHeight(window.innerHeight);
-  canvas.renderAll();
-});
-
