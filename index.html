@@ -2,362 +2,191 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Excalidraw Style Whiteboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Excalidraw-Style Vector Canvas</title>
   
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Virgil&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  
+  <!-- Fabric.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
-  <!-- Fabric Eraser Plugin -->
-  <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/src/mixins/eraser_brush.mixin.js"></script>
 
   <style>
-    :root {
-      --bg-app: #121212;
-      --panel-bg: rgba(24, 24, 27, 0.94);
-      --border-color: rgba(255, 255, 255, 0.12);
-      --text-main: #ffffff;
-      --text-muted: #a1a1aa;
-      --accent: #a78bfa;
-      --accent-light: rgba(167, 139, 250, 0.18);
-      --radius-lg: 12px;
-      --radius-md: 8px;
-      --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-
-    body {
-      width: 100vw;
-      height: 100vh;
+    body, html {
+      width: 100%;
+      height: 100%;
       overflow: hidden;
-      font-family: var(--font-inter);
-      background-color: var(--bg-app);
-      color: var(--text-main);
-      touch-action: none;
+      background-color: #121212;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #e0e0e0;
     }
 
-    /* GRID BACKGROUND CONTROLS */
     #canvas-container {
       width: 100vw;
       height: 100vh;
       position: absolute;
       top: 0;
       left: 0;
-      background-color: #121212;
-      background-position: 0px 0px;
+      touch-action: none;
     }
 
-    #canvas-container.grid-lines {
-      background-image: 
-        linear-gradient(to right, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-      background-size: 24px 24px;
-    }
-
-    #canvas-container.grid-dots {
-      background-image: radial-gradient(rgba(255, 255, 255, 0.2) 1px, transparent 1px);
-      background-size: 20px 20px;
-    }
-
-    #canvas-container.grid-none {
-      background-image: none;
-    }
-
-    canvas { touch-action: none; display: block; }
-
-    .ui-element {
-      transition: opacity 0.2s ease, transform 0.2s ease;
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    .excali-island, .excali-card {
-      position: absolute;
-      z-index: 100;
-      background: var(--panel-bg);
-      backdrop-filter: blur(14px);
-      border: 1px solid var(--border-color);
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
-      border-radius: var(--radius-lg);
-    }
-
-    /* TOP HEADER */
-    #top-header {
-      top: 10px;
-      left: 10px;
-      right: 10px;
+    /* Floating Toolbars */
+    .toolbar {
+      position: fixed;
+      background: rgba(30, 30, 30, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 8px 12px;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 4px 8px;
-      gap: 6px;
-      max-width: calc(100vw - 20px);
-      overflow-x: auto;
-    }
-
-    .header-section { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-    .island-divider { width: 1px; height: 20px; background: var(--border-color); margin: 0 2px; flex-shrink: 0; }
-
-    .tool-btn, .ai-btn {
-      border: none;
-      background: transparent;
-      color: var(--text-main);
-      border-radius: var(--radius-md);
-      padding: 6px 8px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 13px;
-      font-weight: 600;
-      transition: all 0.15s ease;
-      white-space: nowrap;
-    }
-
-    .tool-btn:hover { background: var(--accent-light); color: var(--accent); }
-    .tool-btn.active { background: var(--accent); color: #000; }
-    .ai-btn { background: #8b5cf6; color: #ffffff; padding: 5px 10px; font-size: 11px; }
-
-    /* BOTTOM TOOLBAR CONTAINER */
-    #toolbar-wrapper {
-      position: absolute;
-      bottom: 12px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      flex-direction: column;
       align-items: center;
       gap: 8px;
       z-index: 100;
-      width: max-content;
-      max-width: calc(100vw - 20px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      transition: opacity 0.3s ease, transform 0.3s ease;
     }
 
-    #excali-toolbar {
-      position: relative;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 6px 10px;
-      max-width: 100%;
-      overflow-x: auto;
+    /* Main Floating Toolbar - Top Center */
+    #main-toolbar {
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
     }
 
-    /* ERASER POPOVER SUBMENU */
-    #eraser-popover {
-      display: none;
-      gap: 6px;
-      padding: 6px 8px;
-      background: var(--panel-bg);
-      backdrop-filter: blur(14px);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-lg);
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+    /* Secondary Control Toolbar - Bottom Right */
+    #action-toolbar {
+      bottom: 16px;
+      right: 16px;
     }
 
-    #eraser-popover.visible { display: flex; }
+    /* Background/Grid Panel - Bottom Left */
+    #view-toolbar {
+      bottom: 16px;
+      left: 16px;
+    }
 
-    .popover-btn {
+    .tool-btn {
+      background: transparent;
       border: none;
-      background: transparent;
-      color: var(--text-main);
-      border-radius: var(--radius-md);
-      padding: 6px 10px;
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      transition: all 0.15s ease;
-    }
-
-    .popover-btn:hover { background: var(--accent-light); color: var(--accent); }
-    .popover-btn.active { background: var(--accent); color: #000; }
-
-    /* LEFT SIDEBAR CONTROLS */
-    #sidebar {
-      top: 60px;
-      left: 10px;
-      width: 160px;
-      padding: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      max-height: calc(100vh - 140px);
-      overflow-y: auto;
-    }
-
-    .prop-group { display: flex; flex-direction: column; gap: 6px; }
-    .prop-label { font-size: 9px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); }
-    
-    .color-swatches { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
-    .swatch { width: 20px; height: 20px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); cursor: pointer; }
-    .swatch.active { outline: 2px solid var(--accent); }
-
-    /* COLOR WHEEL / BAR INPUT */
-    .color-picker-wrapper {
-      width: 20px;
-      height: 20px;
-      border-radius: 4px;
-      overflow: hidden;
-      border: 1px solid rgba(255,255,255,0.3);
-      position: relative;
-      background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
-      cursor: pointer;
-    }
-
-    .color-picker-input {
-      opacity: 0;
-      width: 100%;
-      height: 100%;
-      cursor: pointer;
-      position: absolute;
-      top: 0;
-      left: 0;
-    }
-
-    .grid-toggle-group { display: flex; gap: 4px; }
-    .grid-btn {
-      flex: 1;
-      padding: 4px 6px;
-      border: 1px solid var(--border-color);
-      background: transparent;
-      color: var(--text-main);
-      border-radius: var(--radius-md);
-      font-size: 10px;
-      font-weight: 600;
-      cursor: pointer;
-      text-align: center;
-    }
-    .grid-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
-
-    /* CLOSABLE AI PANEL */
-    #ai-panel {
-      bottom: 80px;
-      right: 10px;
-      width: 220px;
+      color: #a0a0a0;
       padding: 8px 12px;
-      display: block;
-    }
-
-    #ai-panel.hidden { display: none; }
-
-    .panel-header {
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      margin-bottom: 2px;
+      gap: 6px;
+      transition: all 0.2s ease;
     }
 
-    .panel-title { font-size: 9px; font-weight: 700; text-transform: uppercase; color: var(--accent); }
-    
-    .close-btn {
-      background: transparent;
-      border: none;
-      color: var(--text-muted);
-      font-size: 12px;
+    .tool-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #ffffff;
+    }
+
+    .tool-btn.active {
+      background: #6366f1;
+      color: #ffffff;
+    }
+
+    .divider {
+      width: 1px;
+      height: 24px;
+      background: rgba(255, 255, 255, 0.1);
+      margin: 0 4px;
+    }
+
+    /* Dropdowns & Color Inputs */
+    select, input[type="color"] {
+      background: rgba(20, 20, 20, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #ffffff;
+      padding: 6px 10px;
+      border-radius: 6px;
+      outline: none;
       cursor: pointer;
-      padding: 0 2px;
-      line-height: 1;
+      font-size: 13px;
     }
 
-    .close-btn:hover { color: #ffffff; }
+    input[type="color"] {
+      padding: 0;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      overflow: hidden;
+    }
 
-    #ai-output { font-size: 11px; line-height: 1.3; max-height: 48px; overflow-y: auto; color: #e4e4e7; }
+    input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+    input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
+
+    /* Zen Mode Hide */
+    body.zen-mode .toolbar {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-20px);
+    }
   </style>
 </head>
 <body>
 
-  <!-- Top Action Header -->
-  <div id="top-header" class="ui-element excali-island">
-    <div class="header-section">
-      <button id="undoBtn" class="tool-btn" title="Undo">↩️</button>
-      <button id="redoBtn" class="tool-btn" title="Redo">↪️</button>
-      <div class="island-divider"></div>
-      <button id="clearBtn" class="tool-btn" title="Clear Canvas">🗑️</button>
-    </div>
-
-    <div class="header-section">
-      <button id="text2DiagramBtn" class="ai-btn">📊 Diagram</button>
-      <button id="txt2imgBtn" class="ai-btn">🎨 Image</button>
-      <button id="analyzeBtn" class="ai-btn">🤖 Vision</button>
-      <div class="island-divider"></div>
-      <button id="downloadBtn" class="tool-btn" title="Save File">💾</button>
-      <button id="loadBtn" class="tool-btn" title="Open File">📂</button>
-      <input type="file" id="fileInput" accept=".json" style="display:none;" />
-      <input type="file" id="imageLoader" accept="image/*" style="display:none;" />
-    </div>
+  <div id="canvas-container">
+    <canvas id="c"></canvas>
   </div>
 
-  <!-- Bottom Toolbar & Popover Wrapper -->
-  <div id="toolbar-wrapper">
-    <!-- Eraser Submenu Popover -->
-    <div id="eraser-popover" class="ui-element">
-      <button id="strokeEraserBtn" class="popover-btn active">⚡ Stroke / Object</button>
-      <button id="freeEraserBtn" class="popover-btn">✏️ Freeform Area</button>
-    </div>
+  <!-- Main Floating Toolbar -->
+  <div id="main-toolbar" class="toolbar">
+    <button class="tool-btn active" id="btn-select">🖐️ Pan / Select</button>
+    <button class="tool-btn" id="btn-draw">✏️ Draw</button>
+    <button class="tool-btn" id="btn-erase-pixel">🧹 Pixel Eraser</button>
+    <button class="tool-btn" id="btn-erase-object">❌ Stroke Eraser</button>
+    
+    <div class="divider"></div>
 
-    <!-- Excalidraw Bottom Toolbar -->
-    <div id="excali-toolbar" class="ui-element excali-island">
-      <button id="handBtn" class="tool-btn" title="Hand (Pan / Look Around)">🖐️</button>
-      <button id="selectBtn" class="tool-btn" title="Selection Mode">👆</button>
-      <button id="drawBtn" class="tool-btn active" title="Draw Pencil">✏️</button>
-      <button id="eraseBtn" class="tool-btn" title="Eraser Options">🧹</button>
-      <div class="island-divider"></div>
-      <button id="rectBtn" class="tool-btn" title="Rectangle">▭</button>
-      <button id="circleBtn" class="tool-btn" title="Circle">◯</button>
-      <button id="arrowBtn" class="tool-btn" title="Arrow">➔</button>
-      <button id="textBtn" class="tool-btn" title="Text">A</button>
-      <button id="imgUploadBtn" class="tool-btn" title="Import Image">🖼️</button>
-    </div>
+    <button class="tool-btn" id="btn-rect">🔲 Box</button>
+    <button class="tool-btn" id="btn-circle">⚪ Circle</button>
+    <button class="tool-btn" id="btn-text">📝 Text</button>
+
+    <div class="divider"></div>
+
+    <label for="color-picker" style="font-size: 12px; color: #a0a0a0;">Stroke:</label>
+    <input type="color" id="color-picker" value="#ffffff" />
+
+    <div class="divider"></div>
+
+    <!-- AI Tools Dropdown -->
+    <select id="ai-tool-select">
+      <option value="" disabled selected>✨ AI Tools ▾</option>
+      <option value="diagram">Generate Diagram</option>
+      <option value="vision">Analyze Board (Vision)</option>
+    </select>
   </div>
 
-  <!-- Left Sidebar Controls -->
-  <div id="sidebar" class="ui-element excali-card">
-    <div class="prop-group">
-      <label class="prop-label">Stroke Color</label>
-      <div class="color-swatches">
-        <button class="swatch active" style="background: #ffffff" data-color="#ffffff"></button>
-        <button class="swatch" style="background: #ef4444" data-color="#ef4444"></button>
-        <button class="swatch" style="background: #22c55e" data-color="#22c55e"></button>
-        <button class="swatch" style="background: #3b82f6" data-color="#3b82f6"></button>
-        <button class="swatch" style="background: #eab308" data-color="#eab308"></button>
-        
-        <!-- Color Wheel Picker -->
-        <div class="color-picker-wrapper" title="Custom Color Wheel">
-          <input type="color" id="customColorPicker" class="color-picker-input" value="#ffffff">
-        </div>
-      </div>
-    </div>
-
-    <div class="prop-group">
-      <label class="prop-label">Grid Style</label>
-      <div class="grid-toggle-group">
-        <button class="grid-btn active" data-grid="grid-lines">Grid</button>
-        <button class="grid-btn" data-grid="grid-dots">Dots</button>
-        <button class="grid-btn" data-grid="grid-none">None</button>
-      </div>
-    </div>
+  <!-- View Controls -->
+  <div id="view-toolbar" class="toolbar">
+    <label for="grid-select" style="font-size: 12px; color: #a0a0a0;">Grid Pattern:</label>
+    <select id="grid-select">
+      <option value="math">Math Grid</option>
+      <option value="dots">Dot Grid</option>
+      <option value="rule">Single Rule</option>
+      <option value="none">None</option>
+    </select>
   </div>
 
-  <!-- Closable AI Panel -->
-  <div id="ai-panel" class="ui-element excali-card">
-    <div class="panel-header">
-      <span class="panel-title">AI Assistant</span>
-      <button id="closeAiPanel" class="close-btn" title="Close Panel">✕</button>
-    </div>
-    <div id="ai-output">Import images or generate diagrams...</div>
-  </div>
-
-  <div id="canvas-container" class="grid-lines">
-    <canvas id="drawingCanvas"></canvas>
+  <!-- Action Controls -->
+  <div id="action-toolbar" class="toolbar">
+    <button class="tool-btn" id="btn-undo">↩️ Undo</button>
+    <button class="tool-btn" id="btn-redo">↪️ Redo</button>
+    <div class="divider"></div>
+    <button class="tool-btn" id="btn-export">📷 Export Note PNG</button>
+    <button class="tool-btn" id="btn-save">💾 Save JSON</button>
   </div>
 
   <script src="app.js"></script>
 </body>
 </html>
-
