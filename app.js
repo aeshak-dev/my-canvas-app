@@ -6,7 +6,10 @@ const canvas = new fabric.Canvas('drawingCanvas', {
   width: window.innerWidth,
   height: window.innerHeight,
   backgroundColor: '#121212',
-  selection: false
+  selection: false,
+  preserveObjectStacking: true, // Prevents re-ordering flicker during undo/redo
+  perPixelTargetFind: true,      // Precise hit detection for 1-click stroke erasing
+  targetFindTolerance: 8         // Makes targeting small strokes easier
 });
 
 let currentColor = '#ffffff';
@@ -32,6 +35,7 @@ canvas.on('path:created', (opt) => {
     if (currentMode === 'erase') {
       opt.path.globalCompositeOperation = 'destination-out';
       opt.path.stroke = 'rgba(0,0,0,1)';
+      canvas.requestRenderAll();
     }
   }
 });
@@ -44,14 +48,14 @@ document.querySelectorAll('.ui-element').forEach(element => {
   element.addEventListener('mousedown', stopEvt);
 });
 
-// --- UNDO / REDO ---
+// --- SEAMLESS UNDO / REDO ---
 let historyStack = [];
 let redoStack = [];
 let isStateChanging = false;
 
 function pushState() {
   if (isStateChanging) return;
-  historyStack.push(canvas.toJSON());
+  historyStack.push(canvas.toDatalessJSON());
   redoStack = [];
 }
 
@@ -61,31 +65,36 @@ canvas.on('object:added', pushState);
 canvas.on('object:modified', pushState);
 canvas.on('object:removed', pushState);
 
+function applyStateSeamlessly(jsonState) {
+  isStateChanging = true;
+  
+  // Parse state silently without triggering instant re-renders to prevent screen flash
+  canvas.loadFromJSONObject(jsonState, () => {
+    // Re-apply objects' clickability/editability based on current tool mode
+    canvas.forEachObject(obj => {
+      obj.selectable = (currentMode === 'select');
+      obj.evented = (currentMode === 'select' || currentMode === 'strokeErase');
+    });
+
+    updateCanvasBackground();
+    canvas.renderAll();
+    isStateChanging = false;
+  });
+}
+
 document.getElementById('undoBtn').addEventListener('click', () => {
   if (historyStack.length > 1) {
-    isStateChanging = true;
     redoStack.push(historyStack.pop());
     const prevState = historyStack[historyStack.length - 1];
-    
-    canvas.loadFromJSON(prevState, () => {
-      canvas.renderAll();
-      updateCanvasBackground();
-      isStateChanging = false;
-    });
+    applyStateSeamlessly(prevState);
   }
 });
 
 document.getElementById('redoBtn').addEventListener('click', () => {
   if (redoStack.length > 0) {
-    isStateChanging = true;
     const nextState = redoStack.pop();
     historyStack.push(nextState);
-    
-    canvas.loadFromJSON(nextState, () => {
-      canvas.renderAll();
-      updateCanvasBackground();
-      isStateChanging = false;
-    });
+    applyStateSeamlessly(nextState);
   }
 });
 
@@ -126,6 +135,10 @@ document.querySelectorAll('.bg-swatch').forEach(swatch => {
     currentBgColor = e.currentTarget.getAttribute('data-bg');
     document.getElementById('customBgPicker').value = currentBgColor;
     updateCanvasBackground();
+
+    if (currentMode === 'erase') {
+      canvas.freeDrawingBrush.color = currentBgColor;
+    }
   });
 });
 
@@ -135,6 +148,10 @@ const customBgPicker = document.getElementById('customBgPicker');
     currentBgColor = e.target.value;
     document.querySelectorAll('.bg-swatch').forEach(s => s.classList.remove('active'));
     updateCanvasBackground();
+
+    if (currentMode === 'erase') {
+      canvas.freeDrawingBrush.color = currentBgColor;
+    }
   });
 });
 
@@ -210,25 +227,28 @@ canvas.on('mouse:up', () => {
   }
 });
 
-// --- STROKE-BY-STROKE ERASER HANDLER ---
+// --- HIGH-RESPONSIVENESS STROKE-BY-STROKE ERASER ---
 let isStrokeErasing = false;
+
+function eraseTargetStroke(opt) {
+  if (currentMode !== 'strokeErase') return;
+  const target = opt.target || canvas.findTarget(opt.e, false);
+  if (target) {
+    canvas.remove(target);
+    canvas.requestRenderAll();
+  }
+}
 
 canvas.on('mouse:down', (opt) => {
   if (currentMode === 'strokeErase') {
     isStrokeErasing = true;
-    if (opt.target) {
-      canvas.remove(opt.target);
-      canvas.requestRenderAll();
-    }
+    eraseTargetStroke(opt);
   }
 });
 
 canvas.on('mouse:move', (opt) => {
   if (currentMode === 'strokeErase' && isStrokeErasing) {
-    if (opt.target) {
-      canvas.remove(opt.target);
-      canvas.requestRenderAll();
-    }
+    eraseTargetStroke(opt);
   }
 });
 
@@ -316,7 +336,8 @@ function setMode(mode) {
     canvas.isDrawingMode = true;
     canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
     canvas.freeDrawingBrush.width = 18;
-    canvas.freeDrawingBrush.color = '#000000'; // Placeholder color; destination-out handles erasing
+    // Matching live brush color to background prevents black preview rendering
+    canvas.freeDrawingBrush.color = currentBgColor;
     document.getElementById('eraseBtn').classList.add('active');
   } else if (mode === 'strokeErase') {
     document.getElementById('strokeEraseBtn').classList.add('active');
@@ -380,7 +401,7 @@ function updateCanvasBackground() {
   
   const pattern = createPatternOverlay(currentGridType, gridLineColor);
   canvas.setBackgroundColor(currentBgColor, () => {
-    canvas.setOverlayColor(pattern, canvas.renderAll.bind(canvas));
+    canvas.setOverlayColor(pattern, () => {});
   });
 }
 
@@ -392,6 +413,7 @@ document.querySelectorAll('.grid-btn').forEach(btn => {
     e.target.classList.add('active');
     currentGridType = e.target.getAttribute('data-grid');
     updateCanvasBackground();
+    canvas.requestRenderAll();
   });
 });
 
@@ -405,7 +427,7 @@ document.getElementById('exportImgBtn').addEventListener('click', () => {
 });
 
 document.getElementById('downloadBtn').addEventListener('click', () => {
-  const jsonStr = JSON.stringify(canvas.toJSON());
+  const jsonStr = JSON.stringify(canvas.toDatalessJSON());
   const blob = new Blob([jsonStr], { type: 'application/json' });
   const link = document.createElement('a');
   link.download = 'whiteboard-session.json';
@@ -426,11 +448,9 @@ hiddenFileInput.addEventListener('change', (e) => {
   const reader = new FileReader();
   reader.onload = (evt) => {
     if (file.name.endsWith('.json')) {
-      canvas.loadFromJSON(evt.target.result, () => {
-        canvas.renderAll();
-        updateCanvasBackground();
-        pushState();
-      });
+      const parsed = JSON.parse(evt.target.result);
+      applyStateSeamlessly(parsed);
+      pushState();
     } else {
       fabric.Image.fromURL(evt.target.result, (img) => {
         img.scaleToWidth(canvas.width * 0.5);
@@ -461,4 +481,3 @@ window.addEventListener('resize', () => {
   canvas.setHeight(window.innerHeight);
   canvas.renderAll();
 });
-
