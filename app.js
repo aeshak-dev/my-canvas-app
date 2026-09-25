@@ -1,4 +1,4 @@
-// Disable fabric object caching globally to eliminate stroke ghosting/glitches
+// Initialize Fabric.js Canvas
 fabric.Object.prototype.objectCaching = false;
 
 const canvas = new fabric.Canvas('drawingCanvas', {
@@ -12,13 +12,14 @@ const canvas = new fabric.Canvas('drawingCanvas', {
   targetFindTolerance: 10
 });
 
+// App State (Default color white for dark background visibility)
 let currentColor = '#ffffff';
 let currentBgColor = '#121212';
-let currentGridType = 'grid';
+let currentGridType = 'none';
 let currentBrushSize = 3;
 let currentMode = 'draw';
 
-// Configure Brush Setup
+// Sync Drawing Brush State
 function updateBrush() {
   if (currentMode === 'draw') {
     canvas.isDrawingMode = true;
@@ -28,7 +29,7 @@ function updateBrush() {
   } else if (currentMode === 'erase') {
     canvas.isDrawingMode = true;
     canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
-    // Erase matching current background color
+    // Dynamic Eraser matching active sheet color
     canvas.freeDrawingBrush.color = currentBgColor;
     canvas.freeDrawingBrush.width = 20;
   } else {
@@ -36,25 +37,18 @@ function updateBrush() {
   }
 }
 
-// Ensure drawn paths remain unselectable by default
+// Make drawn paths unselectable
 canvas.on('path:created', (opt) => {
   if (opt.path) {
     opt.path.set({
       selectable: false,
       evented: false
     });
-
-    if (currentMode === 'erase') {
-      // Cuts out drawn paths transparently over custom backgrounds
-      opt.path.globalCompositeOperation = 'destination-out';
-      opt.path.stroke = 'rgba(0,0,0,1)';
-      canvas.requestRenderAll();
-    }
   }
 });
 
-// Prevent UI panels from intercepting canvas clicks
-document.querySelectorAll('.ui-element').forEach(element => {
+// Stop UI panel events from triggering canvas actions
+document.querySelectorAll('.excali-island, .excali-card, .ui-element').forEach(element => {
   const stopEvt = (e) => e.stopPropagation();
   element.addEventListener('pointerdown', stopEvt);
   element.addEventListener('touchstart', stopEvt);
@@ -73,7 +67,6 @@ function saveState() {
   redoStack = [];
 }
 
-// Capture Initial State
 saveState();
 
 canvas.on('object:added', saveState);
@@ -119,7 +112,7 @@ function setMode(mode) {
     obj.evented = (mode === 'select' || mode === 'strokeErase');
   });
 
-  document.querySelectorAll('#excali-toolbar .tool-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('#toolbar .tool-btn').forEach(btn => btn.classList.remove('active'));
 
   if (mode === 'hand') document.getElementById('handBtn')?.classList.add('active');
   if (mode === 'select') document.getElementById('selectBtn')?.classList.add('active');
@@ -137,77 +130,63 @@ document.getElementById('drawBtn')?.addEventListener('click', () => setMode('dra
 document.getElementById('eraseBtn')?.addEventListener('click', () => setMode('erase'));
 document.getElementById('strokeEraseBtn')?.addEventListener('click', () => setMode('strokeErase'));
 
-// --- COLOR SELECTION & BACKGROUNDS ---
-document.querySelectorAll('.stroke-swatch').forEach(swatch => {
+// --- COLOR SELECTION (Black, Gray, White) ---
+document.querySelectorAll('#sidebar .swatch').forEach(swatch => {
   swatch.addEventListener('click', (e) => {
-    document.querySelectorAll('.stroke-swatch').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('#sidebar .swatch').forEach(s => s.classList.remove('active'));
     e.currentTarget.classList.add('active');
-    currentColor = e.currentTarget.getAttribute('data-color');
+    
+    const selectedColor = e.currentTarget.getAttribute('data-color');
+    if (selectedColor) {
+      if (currentMode === 'erase') {
+        // If erasing, update background color & brush eraser color together
+        currentBgColor = selectedColor;
+        updateCanvasBackground();
+      } else {
+        currentColor = selectedColor;
+      }
+      updateBrush();
+    }
+  });
+});
+
+// --- STROKE THICKNESS PICKER ---
+document.querySelectorAll('.thick-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    document.querySelectorAll('.thick-btn').forEach(b => b.classList.remove('active'));
+    const target = e.currentTarget;
+    target.classList.add('active');
+
+    if (target.querySelector('.line-s')) currentBrushSize = 2;
+    if (target.querySelector('.line-m')) currentBrushSize = 5;
+    if (target.querySelector('.line-l')) currentBrushSize = 10;
+
     if (currentMode === 'draw') updateBrush();
   });
 });
 
-const customColorPicker = document.getElementById('customColorPicker');
-if (customColorPicker) {
-  ['input', 'change'].forEach(evt => {
-    customColorPicker.addEventListener(evt, (e) => {
-      currentColor = e.target.value;
-      if (currentMode === 'draw') updateBrush();
-    });
-  });
-}
-
-document.querySelectorAll('.bg-swatch').forEach(swatch => {
-  swatch.addEventListener('click', (e) => {
-    document.querySelectorAll('.bg-swatch').forEach(s => s.classList.remove('active'));
-    e.currentTarget.classList.add('active');
-    currentBgColor = e.currentTarget.getAttribute('data-bg');
-    updateCanvasBackground();
-    if (currentMode === 'erase') updateBrush();
-  });
-});
-
-const customBgPicker = document.getElementById('customBgPicker');
-if (customBgPicker) {
-  ['input', 'change'].forEach(evt => {
-    customBgPicker.addEventListener(evt, (e) => {
-      currentBgColor = e.target.value;
-      updateCanvasBackground();
-      if (currentMode === 'erase') updateBrush();
-    });
-  });
-}
-
-// --- PAPER PATTERNS ---
+// --- CANVAS BACKGROUND & PATTERNS ---
 function createPatternOverlay(type, strokeColor) {
-  if (type === 'none') return null;
+  if (!type || type === 'none') return null;
 
   const patternCanvas = document.createElement('canvas');
   const ctx = patternCanvas.getContext('2d');
 
   if (type === 'grid') {
-    patternCanvas.width = 30;
-    patternCanvas.height = 30;
+    patternCanvas.width = 20;
+    patternCanvas.height = 20;
     ctx.strokeStyle = strokeColor;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(0, 30); ctx.lineTo(30, 30);
-    ctx.moveTo(30, 0); ctx.lineTo(30, 30);
-    ctx.stroke();
-  } else if (type === 'ruled') {
-    patternCanvas.width = 40;
-    patternCanvas.height = 32;
-    ctx.strokeStyle = strokeColor;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, 32); ctx.lineTo(40, 32);
+    ctx.moveTo(0, 20); ctx.lineTo(20, 20);
+    ctx.moveTo(20, 0); ctx.lineTo(20, 20);
     ctx.stroke();
   } else if (type === 'dots') {
-    patternCanvas.width = 24;
-    patternCanvas.height = 24;
+    patternCanvas.width = 20;
+    patternCanvas.height = 20;
     ctx.fillStyle = strokeColor;
     ctx.beginPath();
-    ctx.arc(12, 12, 1.5, 0, Math.PI * 2);
+    ctx.arc(10, 10, 1.2, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -215,14 +194,22 @@ function createPatternOverlay(type, strokeColor) {
 }
 
 function updateCanvasBackground() {
-  const isDark = currentBgColor === '#121212' || currentBgColor === '#1e1e24';
-  const gridLineColor = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.15)';
+  const isDark = currentBgColor === '#121212' || currentBgColor === '#000000';
+  const gridLineColor = isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.15)';
   const pattern = createPatternOverlay(currentGridType, gridLineColor);
 
   canvas.setBackgroundColor(currentBgColor, () => {
     canvas.setOverlayColor(pattern, () => {
       canvas.renderAll();
     });
+  });
+}
+
+const gridSelect = document.querySelector('.grid-picker select');
+if (gridSelect) {
+  gridSelect.addEventListener('change', (e) => {
+    currentGridType = e.target.value.toLowerCase();
+    updateCanvasBackground();
   });
 }
 
@@ -262,11 +249,11 @@ document.getElementById('clearBtn')?.addEventListener('click', () => {
   saveState();
 });
 
-// Initialize Defaults
+// Initialize
 setMode('draw');
 updateCanvasBackground();
 
-// Handle Window Resize
+// Window Resize
 window.addEventListener('resize', () => {
   canvas.setWidth(window.innerWidth);
   canvas.setHeight(window.innerHeight);
