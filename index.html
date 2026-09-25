@@ -1,36 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Stylus Whiteboard</title>
-  <!-- Fabric.js Library -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Stylus Whiteboard - AI Enhanced</title>
   
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
+
   <style>
     :root {
-      --bg-app: #f8f9fa;
-      --panel-bg: rgba(255, 255, 255, 0.94);
-      --border-color: #e9ecef;
-      --text-main: #1e1e1e;
-      --text-muted: #868e96;
-      --accent: #6965db;
-      --accent-hover: #5b57d1;
-      --accent-light: #eef2ff;
-      --danger: #fa5252;
-      --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.06);
-      --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.12);
+      --bg-app: #121212;
+      --panel-bg: rgba(24, 24, 27, 0.94);
+      --border-color: rgba(255, 255, 255, 0.12);
+      --text-main: #ffffff;
+      --text-muted: #a1a1aa;
+      --accent: #a78bfa;
+      --accent-light: rgba(167, 139, 250, 0.18);
       --radius-lg: 12px;
       --radius-md: 8px;
       --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      user-select: none;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
 
     body {
       width: 100vw;
@@ -42,279 +37,387 @@
       touch-action: none;
     }
 
-    /* Base Canvas & Container */
     #canvas-container {
       width: 100vw;
       height: 100vh;
       position: absolute;
       top: 0;
       left: 0;
-      background-color: #ffffff;
+      z-index: 1;
     }
 
-    canvas {
-      touch-action: none;
-      display: block;
-    }
+    canvas { touch-action: none; display: block; }
 
-    /* Floating Islands & Cards */
-    .excali-island {
-      position: absolute;
+    .ui-element {
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      opacity: 1;
+      pointer-events: auto !important;
       z-index: 100;
+    }
+
+    .excali-island, .excali-card {
+      position: absolute;
       background: var(--panel-bg);
-      backdrop-filter: blur(12px);
+      backdrop-filter: blur(14px);
       border: 1px solid var(--border-color);
-      box-shadow: var(--shadow-sm);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
       border-radius: var(--radius-lg);
-      padding: 5px;
+    }
+
+    /* TOP HEADER */
+    #top-header {
+      top: 10px;
+      left: 10px;
+      right: 10px;
       display: flex;
       align-items: center;
-      gap: 4px;
+      justify-content: space-between;
+      padding: 6px 12px;
+      gap: 6px;
+      max-width: calc(100vw - 20px);
+      overflow-x: auto;
     }
 
-    #toolbar {
-      top: 16px;
-      left: 50%;
-      transform: translateX(-50%);
-    }
+    .header-section { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    .island-divider { width: 1px; height: 20px; background: var(--border-color); margin: 0 4px; flex-shrink: 0; }
 
-    .island-divider {
-      width: 1px;
-      height: 20px;
-      background: var(--border-color);
-      margin: 0 3px;
-    }
-
-    /* Buttons Styling */
-    .tool-btn, .pill-btn {
+    .tool-btn {
       border: none;
       background: transparent;
       color: var(--text-main);
       border-radius: var(--radius-md);
-      padding: 8px 12px;
+      padding: 6px 10px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 13px;
-      font-weight: 500;
+      font-weight: 600;
       transition: all 0.15s ease;
+      white-space: nowrap;
+      touch-action: manipulation;
     }
 
-    .tool-btn:hover, .pill-btn:hover, .tool-btn.active {
-      background: var(--accent-light);
+    .tool-btn:hover { background: var(--accent-light); color: var(--accent); }
+    .tool-btn:active { transform: scale(0.95); }
+    .tool-btn.active { background: var(--accent); color: #000; }
+
+    .zoom-display {
+      font-size: 12px;
+      font-weight: 600;
+      min-width: 45px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+
+    /* AI MENU DROPDOWN */
+    .ai-dropdown-wrapper { position: relative; }
+
+    .ai-trigger-btn {
+      background: rgba(167, 139, 250, 0.15);
+      border: 1px solid rgba(167, 139, 250, 0.4);
       color: var(--accent);
     }
+    .ai-trigger-btn:hover { background: rgba(167, 139, 250, 0.3); }
 
-    .tool-btn.danger:hover {
-      background: #fff5f5;
-      color: var(--danger);
-    }
-
-    /* Floating Sidebar Card */
-    .excali-card {
+    .ai-menu {
+      display: none;
       position: absolute;
-      z-index: 100;
+      bottom: calc(100% + 8px);
+      left: 0;
+      min-width: 180px;
       background: var(--panel-bg);
-      backdrop-filter: blur(12px);
       border: 1px solid var(--border-color);
-      box-shadow: var(--shadow-sm);
-      border-radius: var(--radius-lg);
-      padding: 14px;
-    }
-
-    #sidebar {
-      top: 76px;
-      left: 16px;
-      width: 210px;
-      display: flex;
+      border-radius: var(--radius-md);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      backdrop-filter: blur(14px);
       flex-direction: column;
-      gap: 16px;
+      padding: 4px;
+      z-index: 101;
     }
 
-    .prop-group {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
+    .ai-menu.open { display: flex; }
 
-    .prop-label {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      letter-spacing: 0.5px;
-    }
-
-    .color-swatches {
-      display: flex;
-      gap: 6px;
-    }
-
-    .swatch {
-      width: 24px;
-      height: 24px;
-      border-radius: 6px;
-      border: 1px solid rgba(0, 0, 0, 0.1);
-      cursor: pointer;
-      transition: transform 0.15s ease;
-    }
-
-    .swatch:hover, .swatch.active {
-      transform: scale(1.15);
-      box-shadow: 0 0 0 2px var(--accent);
-    }
-
-    .custom-color-row {
+    .ai-menu-item {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-top: 2px;
-    }
-
-    input[type="color"] {
-      -webkit-appearance: none;
-      border: none;
-      width: 28px;
-      height: 28px;
-      border-radius: 6px;
-      cursor: pointer;
+      padding: 8px 12px;
       background: transparent;
-    }
-
-    input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-    input[type="color"]::-webkit-color-swatch {
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-    }
-
-    #hexInput {
-      width: 75px;
-      border: 1px solid var(--border-color);
-      background: #fff;
-      border-radius: 6px;
-      padding: 4px 6px;
-      font-size: 11px;
+      border: none;
       color: var(--text-main);
-      text-align: center;
-      font-family: monospace;
-    }
-
-    .thickness-picker {
-      display: flex;
-      background: #f1f3f5;
-      padding: 3px;
-      border-radius: var(--radius-md);
-      gap: 4px;
-    }
-
-    .thick-btn {
-      flex: 1;
-      height: 28px;
-      border: none;
-      background: transparent;
+      font-size: 12px;
+      font-weight: 500;
       border-radius: 6px;
       cursor: pointer;
+      text-align: left;
+    }
+
+    .ai-menu-item:hover { background: var(--accent-light); color: var(--accent); }
+
+    /* BOTTOM TOOLBAR WRAPPER */
+    #toolbar-wrapper {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
       display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      z-index: 100;
+      width: max-content;
+      max-width: calc(100vw - 20px);
+    }
+
+    #excali-toolbar {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 10px;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+
+    /* LEFT SIDEBAR */
+    #sidebar {
+      top: 60px;
+      left: 10px;
+      width: 180px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: calc(100vh - 140px);
+      overflow-y: auto;
+    }
+
+    .prop-group { display: flex; flex-direction: column; gap: 6px; }
+    .prop-label { font-size: 9px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); }
+    
+    .color-swatches { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .swatch { width: 26px; height: 26px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); cursor: pointer; }
+    .swatch.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+    .color-picker-wrapper {
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.3);
+      position: relative;
+      background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+      cursor: pointer;
+    }
+
+    .color-picker-input {
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .grid-toggle-group { display: flex; flex-wrap: wrap; gap: 4px; }
+    .grid-btn {
+      flex: 1 1 45%;
+      padding: 4px 6px;
+      border: 1px solid var(--border-color);
+      background: transparent;
+      color: var(--text-main);
+      border-radius: var(--radius-md);
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+    }
+    .grid-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+
+    /* MODAL STYLES FOR AI DIAGRAM TOOL */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(6px);
+      z-index: 1000;
       align-items: center;
       justify-content: center;
     }
 
-    .thick-btn.active {
-      background: #fff;
-      box-shadow: var(--shadow-sm);
-    }
+    .modal-overlay.open { display: flex; }
 
-    .line {
-      background: var(--text-main);
-      border-radius: 2px;
-      width: 18px;
-    }
-
-    .line-s { height: 2px; }
-    .line-m { height: 4px; }
-    .line-l { height: 7px; }
-
-    .grid-picker {
-      display: flex;
-      gap: 8px;
-    }
-
-    select {
-      flex: 1;
-      padding: 6px;
+    .modal-card {
+      background: #18181b;
       border: 1px solid var(--border-color);
-      border-radius: 6px;
-      font-size: 11px;
-      background: #fff;
+      border-radius: var(--radius-lg);
+      width: 90%;
+      max-width: 480px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.8);
+    }
+
+    .modal-title { font-size: 16px; font-weight: 700; color: var(--text-main); }
+    .modal-desc { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+
+    .modal-textarea {
+      width: 100%;
+      height: 120px;
+      background: #09090b;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 10px;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 13px;
+      resize: none;
       outline: none;
     }
+
+    .modal-textarea:focus { border-color: var(--accent); }
+
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 8px 14px;
+      border-radius: var(--radius-md);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border: none;
+      color: #000;
+      font-weight: 600;
+      padding: 8px 14px;
+      border-radius: var(--radius-md);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    #hiddenFileInput { display: none; }
   </style>
 </head>
 <body>
 
-  <!-- Main Canvas Container -->
+  <input type="file" id="hiddenFileInput" accept=".json,image/*" />
+
+  <!-- Top Header -->
+  <div id="top-header" class="ui-element excali-island">
+    <div class="header-section">
+      <button id="undoBtn" class="tool-btn" title="Undo">↩️ Undo</button>
+      <button id="redoBtn" class="tool-btn" title="Redo">↪️ Redo</button>
+      <div class="island-divider"></div>
+      <button id="zoomOutBtn" class="tool-btn" title="Zoom Out">🔍 -</button>
+      <span id="zoomDisplay" class="zoom-display">100%</span>
+      <button id="zoomInBtn" class="tool-btn" title="Zoom In">🔍 +</button>
+      <button id="zoomResetBtn" class="tool-btn" title="Reset Zoom">1:1</button>
+      <div class="island-divider"></div>
+      <button id="clearBtn" class="tool-btn" title="Clear Canvas">🗑️ Clear</button>
+    </div>
+
+    <div class="header-section">
+      <button id="exportImgBtn" class="tool-btn" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">🖼️ Export</button>
+      <div class="island-divider"></div>
+      <button id="downloadBtn" class="tool-btn" title="Save File">💾 Save</button>
+      <button id="loadBtn" class="tool-btn" title="Open File">📂 Open</button>
+    </div>
+  </div>
+
+  <!-- Bottom Toolbar -->
+  <div id="toolbar-wrapper" class="ui-element">
+    <div id="excali-toolbar" class="excali-island">
+      <button id="handBtn" class="tool-btn" title="Hand (Pan Mode)">🖐️</button>
+      <button id="selectBtn" class="tool-btn" title="Selection Mode">👆</button>
+      <button id="drawBtn" class="tool-btn active" title="Draw Pencil">✏️</button>
+      <button id="eraseBtn" class="tool-btn" title="Freeform Eraser">🧹 Erase</button>
+      <button id="strokeEraseBtn" class="tool-btn" title="Stroke Eraser (Delete full stroke)">💥 Stroke Eraser</button>
+      <div class="island-divider"></div>
+      <button id="rectBtn" class="tool-btn" title="Rectangle">▭</button>
+      <button id="circleBtn" class="tool-btn" title="Circle">◯</button>
+      <button id="textBtn" class="tool-btn" title="Text">A</button>
+      
+      <div class="island-divider"></div>
+
+      <!-- AI DROPDOWN -->
+      <div class="ai-dropdown-wrapper">
+        <button id="aiMenuTrigger" class="tool-btn ai-trigger-btn" title="AI Tools">✨ AI Tools ▾</button>
+        <div id="aiMenu" class="ai-menu">
+          <button id="aiDiagramBtn" class="ai-menu-item">🔮 Text to Diagram</button>
+          <button id="aiImageBtn" class="ai-menu-item">🖼️ AI Image Generator</button>
+          <button id="aiVisionBtn" class="ai-menu-item">👁️ Vision Analysis</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Left Sidebar -->
+  <div id="sidebar" class="ui-element excali-card">
+    <div class="prop-group">
+      <label class="prop-label">Stroke Color</label>
+      <div class="color-swatches">
+        <button class="swatch stroke-swatch active" style="background: #ffffff" data-color="#ffffff"></button>
+        <button class="swatch stroke-swatch" style="background: #ef4444" data-color="#ef4444"></button>
+        <button class="swatch stroke-swatch" style="background: #22c55e" data-color="#22c55e"></button>
+        <button class="swatch stroke-swatch" style="background: #3b82f6" data-color="#3b82f6"></button>
+        <button class="swatch stroke-swatch" style="background: #eab308" data-color="#eab308"></button>
+        <div class="color-picker-wrapper" title="Custom Stroke Color">
+          <input type="color" id="customColorPicker" class="color-picker-input" value="#ffffff">
+        </div>
+      </div>
+    </div>
+
+    <!-- CANVAS BACKGROUND: STRICTLY BLACK, DARK GREY, LIGHT GREY/WHITE -->
+    <div class="prop-group">
+      <label class="prop-label">Canvas Background</label>
+      <div class="color-swatches">
+        <button class="swatch bg-swatch active" style="background: #121212" data-bg="#121212" title="Black"></button>
+        <button class="swatch bg-swatch" style="background: #1e1e24" data-bg="#1e1e24" title="Dark Grey"></button>
+        <button class="swatch bg-swatch" style="background: #f8fafc" data-bg="#f8fafc" title="Light Grey / White"></button>
+      </div>
+    </div>
+
+    <div class="prop-group">
+      <label class="prop-label">Paper Pattern</label>
+      <div class="grid-toggle-group">
+        <button class="grid-btn active" data-grid="grid">Math Grid</button>
+        <button class="grid-btn" data-grid="ruled">Single Rule</button>
+        <button class="grid-btn" data-grid="dots">Dot Grid</button>
+        <button class="grid-btn" data-grid="none">None</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Text-To-Diagram Modal -->
+  <div id="diagramModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-title">🔮 Text to Diagram Generator</div>
+      <div class="modal-desc">Type process steps separated by arrows (<code>-></code>) or on new lines to automatically generate a visual diagram on the canvas.</div>
+      <textarea id="diagramInput" class="modal-textarea" placeholder="User Request -> Processing -> Fetch Database -> Render Output"></textarea>
+      <div class="modal-actions">
+        <button id="closeDiagramModal" class="btn-secondary">Cancel</button>
+        <button id="generateDiagramBtn" class="btn-primary">Generate Diagram</button>
+      </div>
+    </div>
+  </div>
+
   <div id="canvas-container">
     <canvas id="drawingCanvas"></canvas>
   </div>
 
-  <!-- Top Action Toolbar -->
-  <div id="toolbar" class="excali-island ui-element">
-    <button id="handBtn" class="tool-btn" title="Pan Tool">✋ Hand</button>
-    <button id="selectBtn" class="tool-btn" title="Select Tool">↖ Select</button>
-    <button id="drawBtn" class="tool-btn active" title="Pencil">✏️ Draw</button>
-    <button id="eraseBtn" class="tool-btn" title="Freehand Eraser">🧹 Erase</button>
-    <button id="strokeEraseBtn" class="tool-btn" title="Stroke Eraser">⚡ Stroke Erase</button>
-    
-    <div class="island-divider"></div>
-    
-    <button id="undoBtn" class="pill-btn" title="Undo">↩ Undo</button>
-    <button id="redoBtn" class="pill-btn" title="Redo">↪ Redo</button>
-    <button id="clearBtn" class="tool-btn danger" title="Clear Canvas">🗑️ Clear</button>
-  </div>
-
-  <!-- Left Properties Sidebar -->
-  <div id="sidebar" class="excali-card ui-element">
-    <!-- Stroke Color Picker -->
-    <div class="prop-group">
-      <span class="prop-label">Stroke Color</span>
-      <div class="color-swatches">
-        <div class="swatch active" style="background-color: #1e1e1e;"></div>
-        <div class="swatch" style="background-color: #e03131;"></div>
-        <div class="swatch" style="background-color: #2f9e44;"></div>
-        <div class="swatch" style="background-color: #1971c2;"></div>
-        <div class="swatch" style="background-color: #f59f00;"></div>
-      </div>
-      <div class="custom-color-row">
-        <input type="color" id="customColorPicker" value="#1e1e1e">
-        <input type="text" id="hexInput" value="#1e1e1e">
-      </div>
-    </div>
-
-    <!-- Stroke Thickness Picker -->
-    <div class="prop-group">
-      <span class="prop-label">Thickness</span>
-      <div class="thickness-picker">
-        <button class="thick-btn active"><div class="line line-s"></div></button>
-        <button class="thick-btn"><div class="line line-m"></div></button>
-        <button class="thick-btn"><div class="line line-l"></div></button>
-      </div>
-    </div>
-
-    <!-- Paper Pattern Picker -->
-    <div class="prop-group">
-      <span class="prop-label">Canvas Pattern</span>
-      <div class="grid-picker">
-        <select>
-          <option value="none">Blank</option>
-          <option value="grid">Grid</option>
-          <option value="dots">Dots</option>
-        </select>
-      </div>
-    </div>
-  </div>
-
-  <!-- Application Script -->
   <script src="app.js"></script>
 </body>
 </html>
