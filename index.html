@@ -1,31 +1,36 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stylus Whiteboard</title>
+  <!-- Fabric.js Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
   
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  
-  <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
-
   <style>
     :root {
-      --bg-app: #121212;
-      --panel-bg: rgba(24, 24, 27, 0.94);
-      --border-color: rgba(255, 255, 255, 0.12);
-      --text-main: #ffffff;
-      --text-muted: #a1a1aa;
-      --accent: #a78bfa;
-      --accent-light: rgba(167, 139, 250, 0.18);
+      --bg-app: #f8f9fa;
+      --panel-bg: rgba(255, 255, 255, 0.94);
+      --border-color: #e9ecef;
+      --text-main: #1e1e1e;
+      --text-muted: #868e96;
+      --accent: #6965db;
+      --accent-hover: #5b57d1;
+      --accent-light: #eef2ff;
+      --danger: #fa5252;
+      --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.06);
+      --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.12);
       --radius-lg: 12px;
       --radius-md: 8px;
       --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
 
     body {
       width: 100vw;
@@ -37,293 +42,279 @@
       touch-action: none;
     }
 
+    /* Base Canvas & Container */
     #canvas-container {
       width: 100vw;
       height: 100vh;
       position: absolute;
       top: 0;
       left: 0;
-      z-index: 1;
+      background-color: #ffffff;
     }
 
-    canvas { touch-action: none; display: block; }
-
-    .ui-element {
-      transition: opacity 0.25s ease, transform 0.25s ease;
-      opacity: 1;
-      pointer-events: auto !important;
-      z-index: 100;
+    canvas {
+      touch-action: none;
+      display: block;
     }
 
-    .excali-island, .excali-card {
+    /* Floating Islands & Cards */
+    .excali-island {
       position: absolute;
+      z-index: 100;
       background: var(--panel-bg);
-      backdrop-filter: blur(14px);
+      backdrop-filter: blur(12px);
       border: 1px solid var(--border-color);
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+      box-shadow: var(--shadow-sm);
       border-radius: var(--radius-lg);
-    }
-
-    /* TOP HEADER */
-    #top-header {
-      top: 10px;
-      left: 10px;
-      right: 10px;
+      padding: 5px;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 4px 8px;
-      gap: 6px;
-      max-width: calc(100vw - 20px);
-      overflow-x: auto;
+      gap: 4px;
     }
 
-    .header-section { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-    .island-divider { width: 1px; height: 20px; background: var(--border-color); margin: 0 2px; flex-shrink: 0; }
+    #toolbar {
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
 
-    .tool-btn {
+    .island-divider {
+      width: 1px;
+      height: 20px;
+      background: var(--border-color);
+      margin: 0 3px;
+    }
+
+    /* Buttons Styling */
+    .tool-btn, .pill-btn {
       border: none;
       background: transparent;
       color: var(--text-main);
       border-radius: var(--radius-md);
-      padding: 6px 10px;
+      padding: 8px 12px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 500;
       transition: all 0.15s ease;
-      white-space: nowrap;
-      touch-action: manipulation;
     }
 
-    .tool-btn:hover { background: var(--accent-light); color: var(--accent); }
-    .tool-btn:active { transform: scale(0.95); }
-    .tool-btn.active { background: var(--accent); color: #000; }
-
-    /* AI MENU DROPDOWN */
-    .ai-dropdown-wrapper { position: relative; }
-
-    .ai-trigger-btn {
-      background: rgba(167, 139, 250, 0.12);
-      border: 1px solid rgba(167, 139, 250, 0.3);
+    .tool-btn:hover, .pill-btn:hover, .tool-btn.active {
+      background: var(--accent-light);
       color: var(--accent);
     }
-    .ai-trigger-btn:hover { background: rgba(167, 139, 250, 0.25); }
 
-    .ai-menu {
-      display: none;
-      position: absolute;
-      bottom: calc(100% + 8px);
-      left: 0;
-      min-width: 160px;
-      background: var(--panel-bg);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-md);
-      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
-      backdrop-filter: blur(14px);
-      flex-direction: column;
-      padding: 4px;
-      z-index: 101;
+    .tool-btn.danger:hover {
+      background: #fff5f5;
+      color: var(--danger);
     }
 
-    .ai-menu.open { display: flex; }
+    /* Floating Sidebar Card */
+    .excali-card {
+      position: absolute;
+      z-index: 100;
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      box-shadow: var(--shadow-sm);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+    }
 
-    .ai-menu-item {
+    #sidebar {
+      top: 76px;
+      left: 16px;
+      width: 210px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .prop-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .prop-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+    }
+
+    .color-swatches {
+      display: flex;
+      gap: 6px;
+    }
+
+    .swatch {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+
+    .swatch:hover, .swatch.active {
+      transform: scale(1.15);
+      box-shadow: 0 0 0 2px var(--accent);
+    }
+
+    .custom-color-row {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 12px;
-      background: transparent;
+      margin-top: 2px;
+    }
+
+    input[type="color"] {
+      -webkit-appearance: none;
       border: none;
-      color: var(--text-main);
-      font-size: 12px;
-      font-weight: 500;
+      width: 28px;
+      height: 28px;
       border-radius: 6px;
       cursor: pointer;
-      text-align: left;
-    }
-
-    .ai-menu-item:hover { background: var(--accent-light); color: var(--accent); }
-
-    /* BOTTOM TOOLBAR WRAPPER */
-    #toolbar-wrapper {
-      position: absolute;
-      bottom: 12px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      z-index: 100;
-      width: max-content;
-      max-width: calc(100vw - 20px);
-    }
-
-    #excali-toolbar {
-      position: relative;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 6px 10px;
-      max-width: 100%;
-      overflow-x: auto;
-    }
-
-    /* LEFT SIDEBAR */
-    #sidebar {
-      top: 60px;
-      left: 10px;
-      width: 180px;
-      padding: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      max-height: calc(100vh - 140px);
-      overflow-y: auto;
-    }
-
-    .prop-group { display: flex; flex-direction: column; gap: 6px; }
-    .prop-label { font-size: 9px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); }
-    
-    .color-swatches { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
-    .swatch { width: 22px; height: 22px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); cursor: pointer; }
-    .swatch.active { outline: 2px solid var(--accent); }
-
-    .color-picker-wrapper {
-      width: 22px;
-      height: 22px;
-      border-radius: 4px;
-      overflow: hidden;
-      border: 1px solid rgba(255,255,255,0.3);
-      position: relative;
-      background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
-      cursor: pointer;
-    }
-
-    .color-picker-input {
-      opacity: 0;
-      width: 100%;
-      height: 100%;
-      cursor: pointer;
-      position: absolute;
-      top: 0;
-      left: 0;
-    }
-
-    .grid-toggle-group { display: flex; flex-wrap: wrap; gap: 4px; }
-    .grid-btn {
-      flex: 1 1 45%;
-      padding: 4px 6px;
-      border: 1px solid var(--border-color);
       background: transparent;
-      color: var(--text-main);
-      border-radius: var(--radius-md);
-      font-size: 10px;
-      font-weight: 600;
-      cursor: pointer;
-      text-align: center;
     }
-    .grid-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
 
-    #hiddenFileInput { display: none; }
+    input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+    input[type="color"]::-webkit-color-swatch {
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+    }
+
+    #hexInput {
+      width: 75px;
+      border: 1px solid var(--border-color);
+      background: #fff;
+      border-radius: 6px;
+      padding: 4px 6px;
+      font-size: 11px;
+      color: var(--text-main);
+      text-align: center;
+      font-family: monospace;
+    }
+
+    .thickness-picker {
+      display: flex;
+      background: #f1f3f5;
+      padding: 3px;
+      border-radius: var(--radius-md);
+      gap: 4px;
+    }
+
+    .thick-btn {
+      flex: 1;
+      height: 28px;
+      border: none;
+      background: transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .thick-btn.active {
+      background: #fff;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .line {
+      background: var(--text-main);
+      border-radius: 2px;
+      width: 18px;
+    }
+
+    .line-s { height: 2px; }
+    .line-m { height: 4px; }
+    .line-l { height: 7px; }
+
+    .grid-picker {
+      display: flex;
+      gap: 8px;
+    }
+
+    select {
+      flex: 1;
+      padding: 6px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      font-size: 11px;
+      background: #fff;
+      outline: none;
+    }
   </style>
 </head>
 <body>
 
-  <input type="file" id="hiddenFileInput" accept=".json,image/*" />
-
-  <!-- Top Header -->
-  <div id="top-header" class="ui-element excali-island">
-    <div class="header-section">
-      <button id="undoBtn" class="tool-btn" title="Undo">↩️ Undo</button>
-      <button id="redoBtn" class="tool-btn" title="Redo">↪️ Redo</button>
-      <div class="island-divider"></div>
-      <button id="clearBtn" class="tool-btn" title="Clear Canvas">🗑️ Clear</button>
-    </div>
-
-    <div class="header-section">
-      <button id="exportImgBtn" class="tool-btn" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">🖼️ Export</button>
-      <div class="island-divider"></div>
-      <button id="downloadBtn" class="tool-btn" title="Save File">💾 Save</button>
-      <button id="loadBtn" class="tool-btn" title="Open File">📂 Open</button>
-    </div>
-  </div>
-
-  <!-- Bottom Toolbar -->
-  <div id="toolbar-wrapper" class="ui-element">
-    <div id="excali-toolbar" class="excali-island">
-      <button id="handBtn" class="tool-btn" title="Hand (Pan Mode)">🖐️</button>
-      <button id="selectBtn" class="tool-btn" title="Selection Mode">👆</button>
-      <button id="drawBtn" class="tool-btn active" title="Draw Pencil">✏️</button>
-      <button id="eraseBtn" class="tool-btn" title="Freeform Eraser">🧹</button>
-      <button id="strokeEraseBtn" class="tool-btn" title="Stroke Eraser (Delete full stroke)">💥</button>
-      <div class="island-divider"></div>
-      <button id="rectBtn" class="tool-btn" title="Rectangle">▭</button>
-      <button id="circleBtn" class="tool-btn" title="Circle">◯</button>
-      <button id="textBtn" class="tool-btn" title="Text">A</button>
-      
-      <div class="island-divider"></div>
-
-      <!-- AI DROPDOWN -->
-      <div class="ai-dropdown-wrapper">
-        <button id="aiMenuTrigger" class="tool-btn ai-trigger-btn" title="AI Tools">✨ AI Tools ▾</button>
-        <div id="aiMenu" class="ai-menu">
-          <button id="aiDiagramBtn" class="ai-menu-item">🔮 Diagram</button>
-          <button id="aiImageBtn" class="ai-menu-item">🖼️ Insert Image</button>
-          <button id="aiVisionBtn" class="ai-menu-item">👁️ Vision Analysis</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Left Sidebar -->
-  <div id="sidebar" class="ui-element excali-card">
-    <div class="prop-group">
-      <label class="prop-label">Stroke Color</label>
-      <div class="color-swatches">
-        <button class="swatch stroke-swatch active" style="background: #ffffff" data-color="#ffffff"></button>
-        <button class="swatch stroke-swatch" style="background: #ef4444" data-color="#ef4444"></button>
-        <button class="swatch stroke-swatch" style="background: #22c55e" data-color="#22c55e"></button>
-        <button class="swatch stroke-swatch" style="background: #3b82f6" data-color="#3b82f6"></button>
-        <button class="swatch stroke-swatch" style="background: #eab308" data-color="#eab308"></button>
-        <div class="color-picker-wrapper" title="Custom Stroke Color">
-          <input type="color" id="customColorPicker" class="color-picker-input" value="#ffffff">
-        </div>
-      </div>
-    </div>
-
-    <div class="prop-group">
-      <label class="prop-label">Canvas Background</label>
-      <div class="color-swatches">
-        <button class="swatch bg-swatch active" style="background: #121212" data-bg="#121212"></button>
-        <button class="swatch bg-swatch" style="background: #1e1e24" data-bg="#1e1e24"></button>
-        <button class="swatch bg-swatch" style="background: #f8fafc" data-bg="#f8fafc"></button>
-        <button class="swatch bg-swatch" style="background: #fef3c7" data-bg="#fef3c7"></button>
-        <div class="color-picker-wrapper" title="Custom Canvas BG">
-          <input type="color" id="customBgPicker" class="color-picker-input" value="#121212">
-        </div>
-      </div>
-    </div>
-
-    <div class="prop-group">
-      <label class="prop-label">Paper Pattern</label>
-      <div class="grid-toggle-group">
-        <button class="grid-btn active" data-grid="grid">Math Grid</button>
-        <button class="grid-btn" data-grid="ruled">Single Rule</button>
-        <button class="grid-btn" data-grid="dots">Dot Grid</button>
-        <button class="grid-btn" data-grid="none">None</button>
-      </div>
-    </div>
-  </div>
-
+  <!-- Main Canvas Container -->
   <div id="canvas-container">
     <canvas id="drawingCanvas"></canvas>
   </div>
 
+  <!-- Top Action Toolbar -->
+  <div id="toolbar" class="excali-island ui-element">
+    <button id="handBtn" class="tool-btn" title="Pan Tool">✋ Hand</button>
+    <button id="selectBtn" class="tool-btn" title="Select Tool">↖ Select</button>
+    <button id="drawBtn" class="tool-btn active" title="Pencil">✏️ Draw</button>
+    <button id="eraseBtn" class="tool-btn" title="Freehand Eraser">🧹 Erase</button>
+    <button id="strokeEraseBtn" class="tool-btn" title="Stroke Eraser">⚡ Stroke Erase</button>
+    
+    <div class="island-divider"></div>
+    
+    <button id="undoBtn" class="pill-btn" title="Undo">↩ Undo</button>
+    <button id="redoBtn" class="pill-btn" title="Redo">↪ Redo</button>
+    <button id="clearBtn" class="tool-btn danger" title="Clear Canvas">🗑️ Clear</button>
+  </div>
+
+  <!-- Left Properties Sidebar -->
+  <div id="sidebar" class="excali-card ui-element">
+    <!-- Stroke Color Picker -->
+    <div class="prop-group">
+      <span class="prop-label">Stroke Color</span>
+      <div class="color-swatches">
+        <div class="swatch active" style="background-color: #1e1e1e;"></div>
+        <div class="swatch" style="background-color: #e03131;"></div>
+        <div class="swatch" style="background-color: #2f9e44;"></div>
+        <div class="swatch" style="background-color: #1971c2;"></div>
+        <div class="swatch" style="background-color: #f59f00;"></div>
+      </div>
+      <div class="custom-color-row">
+        <input type="color" id="customColorPicker" value="#1e1e1e">
+        <input type="text" id="hexInput" value="#1e1e1e">
+      </div>
+    </div>
+
+    <!-- Stroke Thickness Picker -->
+    <div class="prop-group">
+      <span class="prop-label">Thickness</span>
+      <div class="thickness-picker">
+        <button class="thick-btn active"><div class="line line-s"></div></button>
+        <button class="thick-btn"><div class="line line-m"></div></button>
+        <button class="thick-btn"><div class="line line-l"></div></button>
+      </div>
+    </div>
+
+    <!-- Paper Pattern Picker -->
+    <div class="prop-group">
+      <span class="prop-label">Canvas Pattern</span>
+      <div class="grid-picker">
+        <select>
+          <option value="none">Blank</option>
+          <option value="grid">Grid</option>
+          <option value="dots">Dots</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Script -->
   <script src="app.js"></script>
 </body>
 </html>
-
